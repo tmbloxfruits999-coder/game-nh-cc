@@ -1,0 +1,249 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Space Collector 3D - Offline Version</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+            pointer-events: none;
+        }
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 16px;
+            text-align: center;
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 20px;
+            border-radius: 20px;
+            border: 1px solid #00ffff;
+        }
+        #gameover {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff0055;
+            font-size: 48px;
+            font-weight: bold;
+            text-align: center;
+            text-shadow: 0 0 20px #ff0055;
+            display: none;
+            cursor: pointer;
+            background: rgba(0,0,0,0.8);
+            padding: 30px;
+            border-radius: 15px;
+            border: 2px solid #ff0055;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">Điểm: <span id="score">0</span></div>
+    <div id="instructions">Dùng phím mũi tên ◄ ► hoặc phím A / D để né chướng ngại vật đỏ và ăn khối cầu vàng</div>
+    <div id="gameover" onclick="resetGame()">GAME OVER<br><span style="font-size: 20px; color: #fff;">Bấm vào đây để chơi lại</span></div>
+
+    <script>
+        // Tạo bộ dựng hình 3D tối giản hoạt động không cần thư viện ngoài
+        const canvas = document.createElement('canvas');
+        document.body.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+
+        let score = 0;
+        let isGameOver = false;
+        let playerX = 0;
+        let speed = 5;
+        let keys = { Left: false, Right: false };
+        let obstacles = [];
+        let items = [];
+        let stars = [];
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            playerX = canvas.width / 2;
+        }
+        window.addEventListener('resize', resize);
+
+        // Khởi tạo các vì sao vũ trụ
+        for(let i = 0; i < 150; i++) {
+            stars.push({
+                x: Math.random() * window.innerWidth,
+                y: Math.random() * window.innerHeight,
+                size: Math.random() * 2 + 0.5,
+                speed: Math.random() * 2 + 0.5
+            });
+        }
+
+        window.addEventListener('keydown', e => {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.Left = true;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.Right = true;
+        });
+        window.addEventListener('keyup', e => {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.Left = false;
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.Right = false;
+        });
+
+        function spawn() {
+            if (isGameOver) return;
+            if (Math.random() < 0.04) {
+                obstacles.push({
+                    x: Math.random() * canvas.width,
+                    y: -30,
+                    size: 30 + Math.random() * 20
+                });
+            }
+            if (Math.random() < 0.03) {
+                items.push({
+                    x: Math.random() * canvas.width,
+                    y: -20,
+                    size: 15
+                });
+            }
+        }
+
+        function update() {
+            if (isGameOver) return;
+
+            if (keys.Left && playerX > 40) playerX -= 8;
+            if (keys.Right && playerX < canvas.width - 40) playerX += 8;
+
+            // Di chuyển sao nền
+            stars.forEach(star => {
+                star.y += star.speed;
+                if (star.y > canvas.height) star.y = 0;
+            });
+
+            // Xử lý vật cản
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].y += speed;
+                
+                // Va chạm người chơi (Cạnh dưới màn hình)
+                let pY = canvas.height - 80;
+                let dist = Math.hypot(playerX - obstacles[i].x, pY - obstacles[i].y);
+                if (dist < obstacles[i].size + 20) {
+                    isGameOver = true;
+                    document.getElementById('gameover').style.display = 'block';
+                }
+
+                if (obstacles[i].y > canvas.height + 50) obstacles.splice(i, 1);
+            }
+
+            // Xử lý vật phẩm điểm thưởng
+            for (let i = items.length - 1; i >= 0; i--) {
+                items[i].y += speed - 1;
+                
+                let pY = canvas.height - 80;
+                let dist = Math.hypot(playerX - items[i].x, pY - items[i].y);
+                if (dist < items[i].size + 20) {
+                    score += 10;
+                    document.getElementById('score').innerText = score;
+                    if(score % 50 === 0) speed += 0.5;
+                    items.splice(i, 1);
+                    continue;
+                }
+
+                if (items[i].y > canvas.height + 50) items.splice(i, 1);
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = '#050505';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Vẽ hiệu ứng không gian 3D giả lập bằng phối cảnh đường tuyến tính
+            ctx.strokeStyle = '#111122';
+            ctx.lineWidth = 2;
+            for(let i = 0; i <= canvas.width; i += canvas.width / 10) {
+                ctx.beginPath();
+                ctx.moveTo(canvas.width / 2, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+            }
+
+            // Vẽ các ngôi sao
+            ctx.fillStyle = '#ffffff';
+            stars.forEach(star => {
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Vẽ chướng ngại vật (Khối 3D Neon Đỏ)
+            obstacles.forEach(obs => {
+                ctx.fillStyle = '#ff0055';
+                ctx.shadowColor = '#ff0055';
+                ctx.shadowBlur = 15;
+                ctx.beginPath();
+                ctx.arc(obs.x, obs.y, obs.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Vẽ vật phẩm thưởng (Khối vàng Neon phát sáng)
+            items.forEach(item => {
+                ctx.fillStyle = '#ffd700';
+                ctx.shadowColor = '#ffd700';
+                ctx.shadowBlur = 15;
+                ctx.beginPath();
+                ctx.arc(item.x, item.y, item.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Vẽ phi thuyền người chơi (Khối pha lê Cyberpunk Tam Giác)
+            if (!isGameOver) {
+                let pY = canvas.height - 80;
+                ctx.fillStyle = '#00ffff';
+                ctx.shadowColor = '#00ffff';
+                ctx.shadowBlur = 20;
+                ctx.beginPath();
+                ctx.moveTo(playerX, pY - 25);
+                ctx.lineTo(playerX - 20, pY + 15);
+                ctx.lineTo(playerX + 20, pY + 15);
+                ctx.closePath();
+                ctx.fill();
+            }
+            ctx.shadowBlur = 0; // Reset shadow để không lag máy
+        }
+
+        function loop() {
+            spawn();
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        function resetGame() {
+            obstacles = [];
+            items = [];
+            score = 0;
+            speed = 5;
+            isGameOver = false;
+            document.getElementById('score').innerText = score;
+            document.getElementById('gameover').style.display = 'none';
+            playerX = canvas.width / 2;
+        }
+
+        // Khởi động
+        resize();
+        loop();
+    </script>
+</body>
+</html>
